@@ -1,0 +1,1859 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+</head>
+<body>
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <div class="row vh-100">
+            <!-- Seção de Opções -->
+            <div class="col-12 d-flex align-items-center justify-content-center bg-primary">
+                <div class="text-white text-center">
+                    <h2 class="mb-5">Bem-vindo, {{ nome }}!</h2>
+                    {% if is_admin %}
+                        <div class="mb-3">
+                            <span class="badge bg-warning text-dark">Perfil Administrador</span>
+                        </div>
+                    {% endif %}
+
+                    {% if empresas|length > 1 %}
+                        <form method="POST" action="{{ url_for('selecionar_empresa') }}" class="mb-4">
+                            <label for="empresa_ativa" class="form-label">Selecionar empresa</label>
+                            <div class="d-flex gap-2 justify-content-center">
+                                <select class="form-select" id="empresa_ativa" name="empresa_ativa" style="max-width: 280px;">
+                                    {% for empresa in empresas %}
+                                        <option value="{{ empresa }}" {% if empresa == empresa_ativa %}selected{% endif %}>{{ empresa }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-light">Trocar</button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <p class="mb-2">Empresa ativa: <strong>{{ empresa_ativa or 'Varejo' }}</strong></p>
+                    {% endif %}
+
+                    <p class="mb-4">Selecione uma opção abaixo para começar</p>
+                    <div class="row g-4" style="max-width: 500px;">
+                        <div class="col-12">
+                            {% if permissoes.download_tabelas %}
+                                <button class="btn btn-light btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalDownload">
+                                    <i class="bi bi-download"></i> Download Tabelas
+                                </button>
+                            {% else %}
+                                <button class="btn btn-secondary btn-lg w-100" disabled>
+                                    <i class="bi bi-lock-fill"></i> Download Tabelas (sem permissão)
+                                </button>
+                            {% endif %}
+                        </div>
+                        <div class="col-12">
+                            {% if permissoes.fazer_pedido %}
+                                <button class="btn btn-light btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalPedido">
+                                    <i class="bi bi-cart-plus"></i> Fazer Pedido
+                                </button>
+                            {% else %}
+                                <button class="btn btn-secondary btn-lg w-100" disabled>
+                                    <i class="bi bi-lock-fill"></i> Fazer Pedido (sem permissão)
+                                </button>
+                            {% endif %}
+                        </div>
+                        <div class="col-12">
+                            {% if permissoes.solicitar_visita %}
+                                <button class="btn btn-light btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalVisita">
+                                    <i class="bi bi-calendar-event"></i> Solicitar Visita
+                                </button>
+                            {% else %}
+                                <button class="btn btn-secondary btn-lg w-100" disabled>
+                                    <i class="bi bi-lock-fill"></i> Solicitar Visita (sem permissão)
+                                </button>
+                            {% endif %}
+                        </div>
+                        <div class="col-12">
+                            {% if permissoes.visualizar_pedidos %}
+                                <button class="btn btn-light btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalPedidos">
+                                    <i class="bi bi-calendar-event"></i> Visualizar Pedidos
+                                </button>
+                            {% else %}
+                                <button class="btn btn-secondary btn-lg w-100" disabled>
+                                    <i class="bi bi-lock-fill"></i> Visualizar Pedidos (sem permissão)
+                                </button>
+                            {% endif %}
+                        </div>
+                        <div class="col-12">
+                            {% if permissoes.atualizar_tabelas %}
+                                <button class="btn btn-light btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalAtualizaTabelas">
+                                    <i class="bi bi-calendar-event"></i> Atualizar Tabelas
+                                </button>
+                            {% else %}
+                                <button class="btn btn-secondary btn-lg w-100" disabled>
+                                    <i class="bi bi-lock-fill"></i> Atualizar Tabelas (sem permissão)
+                                </button>
+                            {% endif %}
+                        </div>
+                        <div class="col-12">
+                            {% if is_admin %}
+                                <button class="btn btn-light btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalMapaVendas">
+                                    <i class="bi bi-geo-alt"></i> Mapa de Vendas
+                                </button>
+                            {% else %}
+                                <button class="btn btn-secondary btn-lg w-100" disabled>
+                                    <i class="bi bi-lock-fill"></i> Mapa de Vendas (somente administrador)
+                                </button>
+                            {% endif %}
+                        </div>
+                        {% if is_admin %}
+                            <div class="col-12">
+                                <button class="btn btn-light btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalRelatorioVendas">
+                                    <i class="bi bi-clipboard-data"></i> Relatório de Vendas
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-light btn-lg w-100" data-bs-toggle="modal" data-bs-target="#modalClientes">
+                                    <i class="bi bi-people"></i> Clientes Cadastrados
+                                </button>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="position-absolute top-0 end-0 p-3">
+                    <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-box-arrow-right"></i> Sair
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Download Tabelas -->
+    <div class="modal fade" id="modalDownload" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Download Tabelas</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="mb-3">
+                            <label for="tabela" class="form-label">Selecione a tabela</label>
+                            <select class="form-select" id="tabela">
+                                <option>Tabela 1</option>
+                                <option>Tabela 2</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary">Download</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Fazer Pedido -->
+    <div class="modal fade" id="modalPedido" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Fazer Pedido</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% if is_admin %}
+                        <div class="alert alert-warning small">
+                            O pedido será salvo para o cliente selecionado abaixo.
+                        </div>
+                        <div class="mb-3">
+                            <label for="selectClientePedido" class="form-label">Cliente do pedido</label>
+                            <select class="form-select" id="selectClientePedido">
+                                <option value="">Carregando clientes...</option>
+                            </select>
+                        </div>
+                    {% endif %}
+
+                    <!-- Seção de Seleção de Produtos -->
+                    <div class="card mb-4">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Selecionar Produto</h6>
+                        </div>
+                        <div class="card-body">
+                            <form id="formAdicionarProduto">
+                                <div class="row">
+                                    <div class="col-12 mb-3">
+                                        <label for="filtroProduto" class="form-label">Buscar Produto</label>
+                                        <input type="text" class="form-control" id="filtroProduto" placeholder="Digite referência ou descrição...">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="selectProduto" class="form-label">Produto</label>
+                                        <select class="form-select" id="selectProduto" required>
+                                            <option value="">Carregando produtos...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2 mb-3">
+                                        <label for="quantidadeProduto" class="form-label">Quantidade</label>
+                                        <input type="number" class="form-control" id="quantidadeProduto" min="1" value="1" required>
+                                    </div>
+                                    <div class="col-md-2 mb-3">
+                                        <label for="descontoProduto" class="form-label">Desconto (%)</label>
+                                        <input type="number" class="form-control" id="descontoProduto" min="0" max="100" step="0.1" value="0" placeholder="0">
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end mb-3">
+                                        <button type="button" class="btn btn-sm btn-info w-100" id="btnVerDetalhes" title="Ver detalhes do produto">
+                                            <i class="bi bi-info-circle"></i> Detalhes
+                                        </button>
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end mb-3">
+                                        <button type="button" class="btn btn-success w-100" id="btnAdicionarProduto">
+                                            <i class="bi bi-plus-circle"></i> Adicionar
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header bg-light d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <h6 class="mb-0">Seleção múltipla de itens</h6>
+                            <div class="d-flex align-items-center gap-2">
+                                <label for="descontoGeralBloco" class="form-label mb-0 small text-nowrap">Desconto geral (%):</label>
+                                <input type="number" class="form-control form-control-sm" id="descontoGeralBloco" min="0" max="100" step="0.1" value="0" style="width: 70px;" placeholder="0">
+                                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="btnAplicarDescontoBloco" title="Aplicar desconto geral a todos os itens da lista">
+                                    Aplicar a todos
+                                </button>
+                                <button type="button" class="btn btn-sm btn-success text-nowrap" id="btnAdicionarSelecionados">
+                                    <i class="bi bi-check2-square"></i> Adicionar selecionados
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-2">Os itens já adicionados ao pedido saem desta lista automaticamente.</p>
+                            <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="text-center" style="width: 50px;">Sel.</th>
+                                            <th>Produto</th>
+                                            <th style="width: 90px;">Qtd.</th>
+                                            <th style="width: 95px;">Desc. (%)</th>
+                                            <th style="width: 120px;">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="listaSelecaoProdutos">
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-3">Carregando produtos...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Detalhes do Produto Selecionado -->
+                    <div class="card mb-4" id="cardDetalhesProduto" style="display: none;">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Detalhes do Produto</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm table-borderless mb-0">
+                                <tr>
+                                    <td><strong>Referência:</strong></td>
+                                    <td id="detalheReferencia">-</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Descrição:</strong></td>
+                                    <td id="detalheDescricao">-</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Quantidade por Embalagem:</strong></td>
+                                    <td id="detalheQuantidadeEmbalagem">-</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Valor Unitário Original:</strong></td>
+                                    <td id="detalheValor">-</td>
+                                </tr>
+                                <tr id="linhaDetalheDesconto" style="display: none;">
+                                    <td><strong>Desconto Aplicado:</strong></td>
+                                    <td id="detalheDesconto">-</td>
+                                </tr>
+                                <tr id="linhaDetalheValorComDesconto" style="display: none;">
+                                    <td><strong>Valor Unitário c/ Desconto:</strong></td>
+                                    <td id="detalheValorComDesconto">-</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Valor Total:</strong></td>
+                                    <td id="detalheValorTotal">-</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tabela Temporária de Produtos Adicionados -->
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Produtos Adicionados</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover mb-0" id="tabelaProdutosAdicionados">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Referência</th>
+                                            <th>Descrição</th>
+                                            <th>Qtd. Emb.</th>
+                                            <th>Quantidade</th>
+                                            <th>Desc. (%)</th>
+                                            <th>Valor Unit.</th>
+                                            <th>Valor Total</th>
+                                            <th class="text-center">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="corpoTabelaProdutos">
+                                        <tr id="linhaVazia">
+                                            <td colspan="8" class="text-center text-muted py-3">Nenhum produto adicionado</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot class="table-light">
+                                        <tr>
+                                            <td colspan="6" class="text-end"><strong>Valor Total:</strong></td>
+                                            <td colspan="2"><strong id="valorTotalPedido">R$ 0,00</strong></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnFinalizarPedido">
+                        <i class="bi bi-check-circle"></i> Finalizar Pedido
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Solicitar Visita -->
+    <div class="modal fade" id="modalVisita" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Solicitar Visita</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+            <div class="modal-body">
+                <form id="modalVisitaForm" method="POST" action="{{ url_for('agendar') }}">
+                    <div class="mb-3">
+                        <label for="data" class="form-label">Data Desejada</label>
+                        <input type="date" class="form-control" id="data" name="data" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="submit" form="modalVisitaForm" class="btn btn-primary">Solicitar Visita</button>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Modal Visualizar Pedidos -->
+    <div class="modal fade" id="modalPedidos" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Visualizar Pedidos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="card border-warning mb-3">
+                        <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">Pedidos pendentes de reenvio</h6>
+                            <button type="button" class="btn btn-sm btn-outline-warning" id="btnReenviarTodosPendentes">
+                                Reenviar todos
+                            </button>
+                        </div>
+                        <div class="card-body" id="pedidosPendentesContainer">
+                            <p class="text-muted mb-0">Nenhum pedido pendente.</p>
+                        </div>
+                    </div>
+
+                    <div id="listaPedidosContainer">
+                        <p class="text-muted mb-0">Carregando pedidos...</p>
+                    </div>
+
+                    <hr>
+
+                    <div id="itensPedidoContainer">
+                        <p class="text-muted mb-0">Selecione um pedido para ver os itens.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if is_admin %}
+        <div class="modal fade" id="modalRelatorioVendas" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Relatório de Vendas</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3 align-items-end mb-3">
+                            <div class="col-md-4">
+                                <label for="relatorioCliente" class="form-label">Cliente</label>
+                                <select class="form-select" id="relatorioCliente">
+                                    <option value="">Todos os clientes</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="relatorioDataInicio" class="form-label">Data inicial</label>
+                                <input type="date" class="form-control" id="relatorioDataInicio">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="relatorioDataFim" class="form-label">Data final</label>
+                                <input type="date" class="form-control" id="relatorioDataFim">
+                            </div>
+                            <div class="col-md-2 d-grid">
+                                <button type="button" class="btn btn-primary" id="btnFiltrarRelatorio">Filtrar</button>
+                            </div>
+                        </div>
+                        <div id="resumoRelatorioVendas" class="text-muted mb-3">Selecione os filtros para carregar o relatório.</div>
+                        <div id="conteudoRelatorioVendas">
+                            <p class="text-muted mb-0">Nenhum relatório carregado.</p>
+                        </div>
+                        <hr>
+                        <div id="itensRelatorioContainer">
+                            <p class="text-muted mb-0">Selecione um pedido no relatório para ver os itens.</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modalClientes" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Cadastro de Clientes</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="selectClienteEdicao" class="form-label">Cliente</label>
+                            <select class="form-select" id="selectClienteEdicao">
+                                <option value="">Selecione um cliente</option>
+                            </select>
+                        </div>
+
+                        <form id="formEditarCliente">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="clienteNome" class="form-label">Nome</label>
+                                    <input type="text" class="form-control" id="clienteNome" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="clienteEmail" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="clienteEmail" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="clienteCelular" class="form-label">Celular</label>
+                                    <input type="text" class="form-control" id="clienteCelular">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="clienteCnpj" class="form-label">CNPJ</label>
+                                    <input type="text" class="form-control" id="clienteCnpj" maxlength="18" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="clienteSenha" class="form-label">Nova senha</label>
+                                    <input type="password" class="form-control" id="clienteSenha" placeholder="Deixe em branco para manter">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="clienteEmpresas" class="form-label">Empresas</label>
+                                    <input type="text" class="form-control" id="clienteEmpresas" placeholder="Varejo, Redemac, Alternativa...">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="clienteEmpresaAtiva" class="form-label">Empresa ativa</label>
+                                    <input type="text" class="form-control" id="clienteEmpresaAtiva">
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check mt-4">
+                                        <input class="form-check-input" type="checkbox" id="clientePermTabela">
+                                        <label class="form-check-label" for="clientePermTabela">Baixar tabelas</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check mt-4">
+                                        <input class="form-check-input" type="checkbox" id="clientePermPedido">
+                                        <label class="form-check-label" for="clientePermPedido">Fazer pedido</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check mt-4">
+                                        <input class="form-check-input" type="checkbox" id="clientePermVisita">
+                                        <label class="form-check-label" for="clientePermVisita">Solicitar visita</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check mt-4">
+                                        <input class="form-check-input" type="checkbox" id="clientePermVisualizar">
+                                        <label class="form-check-label" for="clientePermVisualizar">Visualizar pedidos</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                        <div id="mensagemEditarCliente" class="small mt-3 text-muted"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        <button type="button" class="btn btn-primary" id="btnSalvarCliente">Salvar alterações</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Modal Atualizar Tabelas -->
+    <div class="modal fade" id="modalAtualizaTabelas" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Atualizar Tabelas</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formAtualizarTabelas" method="POST" action="{{ url_for('atualizar_tabelas') }}" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="empresa_arquivo" class="form-label">Empresa</label>
+                            <select class="form-select" id="empresa_arquivo" name="empresa_arquivo" required>
+                                {% for empresa in empresas %}
+                                    <option value="{{ empresa }}" {% if empresa == empresa_ativa %}selected{% endif %}>{{ empresa }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="arquivo_tabela" class="form-label">Arquivo da tabela (.xlsx)</label>
+                            <input class="form-control" type="file" id="arquivo_tabela" name="arquivo_tabela" accept=".xlsx" required>
+                        </div>
+                        <p class="text-muted mb-0">Ao atualizar, o arquivo anterior é renomeado com a data da atualização.</p>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="formAtualizarTabelas" class="btn btn-primary">Enviar Atualização</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Mapa de Vendas -->
+    <div class="modal fade" id="modalMapaVendas" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Visualização de Vendas em Mapa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-md-4">
+                            <label for="mapaDataInicio" class="form-label">Data inicial</label>
+                            <input type="date" class="form-control" id="mapaDataInicio">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="mapaDataFim" class="form-label">Data final</label>
+                            <input type="date" class="form-control" id="mapaDataFim">
+                        </div>
+                        <div class="col-md-4 d-grid">
+                            <button type="button" class="btn btn-primary" id="btnAplicarPeriodoMapa">Aplicar Período</button>
+                        </div>
+                    </div>
+                    <div id="resumoMapaVendas" class="mb-3 text-muted">Carregando resumo...</div>
+                    <div class="small mb-2">
+                        <span class="badge" style="background-color: green;">&nbsp;</span> Clientes com venda
+                        <span class="badge ms-3" style="background-color: red;">&nbsp;</span> Clientes da carteira sem venda
+                    </div>
+                    <div id="mapaVendas" style="height: 520px; border: 1px solid #dee2e6; border-radius: 8px;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script>
+        // Variáveis globais
+        let produtosDisponiveis = [];
+        let pedidoTemporario = [];
+        let clientesDisponiveis = [];
+        let mapaVendasInstancia = null;
+        let camadaPontosMapa = null;
+        let atualizacaoMapaTimer = null;
+        const isAdmin = {{ 'true' if is_admin else 'false' }};
+        const currentUserId = {{ user_id if user_id is not none else 'null' }};
+        const PENDENTES_STORAGE_KEY = 'app-vendas-pedidos-pendentes';
+
+        // Carrega os produtos quando o modal abre
+        document.getElementById('modalPedido').addEventListener('show.bs.modal', function() {
+            carregarProdutos();
+            if (isAdmin) {
+                carregarClientes();
+            }
+        });
+
+        document.getElementById('modalPedidos').addEventListener('shown.bs.modal', function() {
+            console.log('[DEBUG] Modal de pedidos totalmente aberto');
+            console.log('[DEBUG] Elemento listaPedidosContainer:', document.getElementById('listaPedidosContainer'));
+            
+            // Garante que há algo visível imediatamente
+            const container = document.getElementById('listaPedidosContainer');
+            if (container) {
+                container.innerHTML = '<p class="text-info mb-0"><strong>Conectando ao servidor...</strong></p>';
+                console.log('[DEBUG] Container encontrado, iniciando carregamento...');
+                carregarMeusPedidos();
+            } else {
+                console.error('[ERROR] Container listaPedidosContainer não encontrado!');
+            }
+
+            renderizarPedidosPendentes();
+            
+            limparItensPedido();
+        });
+
+        const modalRelatorioVendas = document.getElementById('modalRelatorioVendas');
+        if (modalRelatorioVendas) {
+            modalRelatorioVendas.addEventListener('shown.bs.modal', function() {
+                carregarClientes(true);
+                carregarRelatorioVendas();
+            });
+        }
+
+        const modalClientes = document.getElementById('modalClientes');
+        if (modalClientes) {
+            modalClientes.addEventListener('shown.bs.modal', function() {
+                carregarClientes(true);
+            });
+        }
+
+        const modalMapa = document.getElementById('modalMapaVendas');
+        if (modalMapa) {
+            modalMapa.addEventListener('shown.bs.modal', function() {
+                inicializarMapaVendas();
+                carregarMapaVendas();
+                setTimeout(() => {
+                    if (mapaVendasInstancia) {
+                        mapaVendasInstancia.invalidateSize();
+                    }
+                }, 150);
+            });
+        }
+
+        const btnAplicarPeriodoMapa = document.getElementById('btnAplicarPeriodoMapa');
+        const campoDataInicioMapa = document.getElementById('mapaDataInicio');
+        const campoDataFimMapa = document.getElementById('mapaDataFim');
+
+        function agendarAtualizacaoMapaVendas(delayMs = 350) {
+            if (atualizacaoMapaTimer) {
+                clearTimeout(atualizacaoMapaTimer);
+            }
+
+            atualizacaoMapaTimer = setTimeout(() => {
+                carregarMapaVendas();
+            }, delayMs);
+        }
+
+        if (btnAplicarPeriodoMapa) {
+            btnAplicarPeriodoMapa.addEventListener('click', function() {
+                carregarMapaVendas();
+            });
+        }
+
+        if (campoDataInicioMapa) {
+            campoDataInicioMapa.addEventListener('input', () => agendarAtualizacaoMapaVendas());
+            campoDataInicioMapa.addEventListener('change', () => agendarAtualizacaoMapaVendas());
+        }
+
+        if (campoDataFimMapa) {
+            campoDataFimMapa.addEventListener('input', () => agendarAtualizacaoMapaVendas());
+            campoDataFimMapa.addEventListener('change', () => agendarAtualizacaoMapaVendas());
+        }
+
+        function inicializarMapaVendas() {
+            if (mapaVendasInstancia) {
+                return;
+            }
+
+            mapaVendasInstancia = L.map('mapaVendas').setView([-14.2350, -51.9253], 4);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(mapaVendasInstancia);
+
+            camadaPontosMapa = L.layerGroup().addTo(mapaVendasInstancia);
+        }
+
+        function popupMapaTexto(ponto) {
+            const valor = Number(ponto.valor_produtos || 0).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+
+            return `
+                <div>
+                    <strong>${ponto.nome_cliente || '-'}</strong><br>
+                    Código: ${ponto.codigo || '-'}<br>
+                    Valor produtos: R$ ${valor}<br>
+                    Endereço: ${ponto.endereco || '-'}<br>
+                    Situação: ${ponto.fez_venda ? 'Com venda' : 'Sem venda'}
+                </div>
+            `;
+        }
+
+        async function carregarMapaVendas() {
+            const resumo = document.getElementById('resumoMapaVendas');
+            if (!resumo) {
+                return;
+            }
+
+            const campoDataInicio = document.getElementById('mapaDataInicio');
+            const campoDataFim = document.getElementById('mapaDataFim');
+            const dataInicio = (campoDataInicio?.value || '').trim();
+            const dataFim = (campoDataFim?.value || '').trim();
+
+            if (dataInicio && dataFim && dataInicio > dataFim) {
+                resumo.innerHTML = '<span class="text-danger">A data inicial não pode ser maior que a data final.</span>';
+                return;
+            }
+
+            resumo.innerHTML = 'Carregando dados do mapa...';
+
+            try {
+                const params = new URLSearchParams();
+                if (dataInicio) {
+                    params.set('data_inicio', dataInicio);
+                }
+                if (dataFim) {
+                    params.set('data_fim', dataFim);
+                }
+
+                const urlMapa = params.toString() ? `/dados_mapa_vendas?${params.toString()}` : '/dados_mapa_vendas';
+                const response = await fetch(urlMapa, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    resumo.innerHTML = `<span class="text-danger">Erro ao carregar mapa: ${data.erro || 'falha desconhecida'}</span>`;
+                    return;
+                }
+
+                if (!mapaVendasInstancia || !camadaPontosMapa) {
+                    return;
+                }
+
+                camadaPontosMapa.clearLayers();
+                const pontos = Array.isArray(data.pontos) ? data.pontos : [];
+
+                if (pontos.length === 0) {
+                    resumo.innerHTML = '<span class="text-warning">Nenhum ponto com coordenada encontrado para plotagem.</span>';
+                    mapaVendasInstancia.setView([-14.2350, -51.9253], 4);
+                    return;
+                }
+
+                const limites = [];
+                pontos.forEach((ponto) => {
+                    const marker = L.circleMarker([ponto.latitude, ponto.longitude], {
+                        radius: 6,
+                        color: ponto.cor || (ponto.fez_venda ? 'green' : 'red'),
+                        fillColor: ponto.cor || (ponto.fez_venda ? 'green' : 'red'),
+                        fillOpacity: 0.8,
+                        weight: 1
+                    });
+                    marker.bindPopup(popupMapaTexto(ponto));
+                    marker.addTo(camadaPontosMapa);
+                    limites.push([ponto.latitude, ponto.longitude]);
+                });
+
+                if (limites.length > 0) {
+                    mapaVendasInstancia.fitBounds(limites, { padding: [30, 30] });
+                }
+
+                const resumoApi = data.resumo || {};
+                const periodoApi = resumoApi.periodo || {};
+                const periodoTexto = (periodoApi.data_inicio || periodoApi.data_fim)
+                    ? ` | <strong>Período:</strong> ${periodoApi.data_inicio || '...'} até ${periodoApi.data_fim || '...'}`
+                    : '';
+
+                resumo.innerHTML = `
+                    <strong>Total carteira:</strong> ${resumoApi.total_clientes_carteira || 0} |
+                    <strong>Com venda:</strong> ${resumoApi.clientes_com_venda || 0} |
+                    <strong>Sem venda:</strong> ${resumoApi.clientes_sem_venda || 0} |
+                    <strong>Sem coordenada:</strong> ${resumoApi.clientes_sem_coordenada || 0}
+                    ${periodoTexto}
+                `;
+            } catch (erro) {
+                resumo.innerHTML = `<span class="text-danger">Erro ao carregar mapa: ${erro.message || erro}</span>`;
+            }
+        }
+
+        function formatarMoeda(valor) {
+            return Number(valor || 0).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function obterPedidosPendentes() {
+            try {
+                const dados = localStorage.getItem(PENDENTES_STORAGE_KEY);
+                const pedidos = JSON.parse(dados || '[]');
+                return Array.isArray(pedidos) ? pedidos : [];
+            } catch (erro) {
+                console.error('Erro ao ler pedidos pendentes:', erro);
+                return [];
+            }
+        }
+
+        function salvarPedidosPendentes(pedidos) {
+            localStorage.setItem(PENDENTES_STORAGE_KEY, JSON.stringify(pedidos));
+        }
+
+        function obterNomeClientePorId(clienteId) {
+            const cliente = clientesDisponiveis.find(item => Number(item.id) === Number(clienteId));
+            return cliente ? cliente.nome : `Cliente #${clienteId}`;
+        }
+
+        function salvarPedidoOffline(payload) {
+            const pedidos = obterPedidosPendentes();
+            pedidos.unshift({
+                id_local: `pendente-${Date.now()}`,
+                criado_em: new Date().toISOString(),
+                cliente_id: payload.cliente_id || currentUserId,
+                itens: payload.itens
+            });
+            salvarPedidosPendentes(pedidos);
+            renderizarPedidosPendentes();
+        }
+
+        function removerPedidoPendente(idLocal) {
+            const pedidos = obterPedidosPendentes().filter(item => item.id_local !== idLocal);
+            salvarPedidosPendentes(pedidos);
+            renderizarPedidosPendentes();
+        }
+
+        function limparPedidoTemporario() {
+            pedidoTemporario = [];
+            atualizarTabelaProdutos();
+            atualizarValorTotal();
+            sincronizarListaProdutos();
+        }
+
+        async function reenviarPedidoPendente(idLocal) {
+            const pedido = obterPedidosPendentes().find(item => item.id_local === idLocal);
+            if (!pedido) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/salvar_pedido', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cliente_id: pedido.cliente_id,
+                        itens: pedido.itens
+                    })
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.erro || 'Falha ao reenviar pedido');
+                }
+
+                removerPedidoPendente(idLocal);
+                alert(`Pedido pendente reenviado com sucesso. Novo ID: ${data.pedido_id}`);
+                carregarMeusPedidos();
+            } catch (erro) {
+                alert(`Não foi possível reenviar o pedido pendente: ${erro.message || erro}`);
+            }
+        }
+
+        async function reenviarTodosPendentes() {
+            const pedidos = obterPedidosPendentes();
+            for (const pedido of pedidos) {
+                try {
+                    await reenviarPedidoPendente(pedido.id_local);
+                } catch (erro) {
+                    console.error('Falha no reenvio em lote:', erro);
+                    break;
+                }
+            }
+        }
+
+        function renderizarPedidosPendentes() {
+            const container = document.getElementById('pedidosPendentesContainer');
+            if (!container) {
+                return;
+            }
+
+            const pedidos = obterPedidosPendentes();
+            if (pedidos.length === 0) {
+                container.innerHTML = '<p class="text-muted mb-0">Nenhum pedido pendente.</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Itens</th>
+                                <th>Criado em</th>
+                                <th class="text-center">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pedidos.map((pedido) => `
+                                <tr>
+                                    <td>${obterNomeClientePorId(pedido.cliente_id)}</td>
+                                    <td>${Array.isArray(pedido.itens) ? pedido.itens.length : 0}</td>
+                                    <td>${formatarDataPedido(pedido.criado_em)}</td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="reenviarPedidoPendente('${pedido.id_local}')">
+                                            Reenviar
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function referenciasNoPedido() {
+            return new Set(pedidoTemporario.map(item => item.referencia_produto));
+        }
+
+        function produtosFiltradosDisponiveis(filtro = '') {
+            const termo = filtro.trim().toLowerCase();
+            const referenciasSelecionadas = referenciasNoPedido();
+
+            return produtosDisponiveis.filter((produto) => {
+                const referencia = (produto.referencia || '').toString().toLowerCase();
+                const descricao = (produto.descricao || '').toString().toLowerCase();
+                const correspondeFiltro = !termo || referencia.includes(termo) || descricao.includes(termo);
+                return correspondeFiltro && !referenciasSelecionadas.has(produto.referencia);
+            });
+        }
+
+        function sincronizarListaProdutos() {
+            const filtro = document.getElementById('filtroProduto').value || '';
+            preencherSelectProdutos(filtro);
+            renderizarListaSelecaoProdutos(filtro);
+        }
+
+        async function carregarClientes(preencherSelectsAdmin = false) {
+            try {
+                const response = await fetch('/clientes', {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.erro || 'Falha ao carregar clientes');
+                }
+
+                clientesDisponiveis = Array.isArray(data) ? data : [];
+                preencherClientePedido();
+                if (preencherSelectsAdmin) {
+                    preencherClienteRelatorio();
+                    preencherClienteEdicao();
+                }
+                renderizarPedidosPendentes();
+            } catch (erro) {
+                console.error('Erro ao carregar clientes:', erro);
+            }
+        }
+
+        function preencherClientePedido() {
+            const select = document.getElementById('selectClientePedido');
+            if (!select) {
+                return;
+            }
+
+            const valorSelecionadoAtual = select.value || String(currentUserId || '');
+            select.innerHTML = clientesDisponiveis.map((cliente) => `
+                <option value="${cliente.id}">${cliente.nome} - ${cliente.cnpj}</option>
+            `).join('');
+
+            const existeSelecionado = clientesDisponiveis.some((cliente) => String(cliente.id) === valorSelecionadoAtual);
+            select.value = existeSelecionado ? valorSelecionadoAtual : String(clientesDisponiveis[0]?.id || '');
+        }
+
+        function preencherClienteRelatorio() {
+            const select = document.getElementById('relatorioCliente');
+            if (!select) {
+                return;
+            }
+
+            const atual = select.value;
+            select.innerHTML = '<option value="">Todos os clientes</option>' + clientesDisponiveis.map((cliente) => `
+                <option value="${cliente.id}">${cliente.nome} - ${cliente.cnpj}</option>
+            `).join('');
+            select.value = atual || '';
+        }
+
+        function preencherClienteEdicao() {
+            const select = document.getElementById('selectClienteEdicao');
+            if (!select) {
+                return;
+            }
+
+            const atual = select.value;
+            select.innerHTML = '<option value="">Selecione um cliente</option>' + clientesDisponiveis.map((cliente) => `
+                <option value="${cliente.id}">${cliente.nome} - ${cliente.email}</option>
+            `).join('');
+            select.value = atual || '';
+
+            if (!select.value && clientesDisponiveis.length > 0) {
+                select.value = String(clientesDisponiveis[0].id);
+            }
+            preencherFormularioCliente();
+        }
+
+        function preencherFormularioCliente() {
+            const select = document.getElementById('selectClienteEdicao');
+            if (!select || !select.value) {
+                return;
+            }
+
+            const cliente = clientesDisponiveis.find((item) => String(item.id) === String(select.value));
+            if (!cliente) {
+                return;
+            }
+
+            document.getElementById('clienteNome').value = cliente.nome || '';
+            document.getElementById('clienteEmail').value = cliente.email || '';
+            document.getElementById('clienteCelular').value = cliente.celular || '';
+            document.getElementById('clienteCnpj').value = cliente.cnpj || '';
+            document.getElementById('clienteSenha').value = '';
+            document.getElementById('clienteEmpresas').value = (cliente.empresas || []).join(', ');
+            document.getElementById('clienteEmpresaAtiva').value = cliente.empresa_ativa || '';
+            document.getElementById('clientePermTabela').checked = Boolean(cliente.permissoes?.download_tabelas);
+            document.getElementById('clientePermPedido').checked = Boolean(cliente.permissoes?.fazer_pedido);
+            document.getElementById('clientePermVisita').checked = Boolean(cliente.permissoes?.solicitar_visita);
+            document.getElementById('clientePermVisualizar').checked = Boolean(cliente.permissoes?.visualizar_pedidos);
+            document.getElementById('mensagemEditarCliente').textContent = '';
+        }
+
+        function formatarDataPedido(dataIso) {
+            const data = new Date(dataIso);
+            if (Number.isNaN(data.getTime())) {
+                return '-';
+            }
+            return data.toLocaleString('pt-BR');
+        }
+
+        async function carregarMeusPedidos() {
+            const container = document.getElementById('listaPedidosContainer');
+            if (!container) {
+                console.error('[ERROR] Container não encontrado!');
+                return;
+            }
+            
+            container.innerHTML = '<p class="text-muted mb-0">Carregando pedidos...</p>';
+            console.log('[DEBUG] Iniciando carregamento de pedidos...');
+
+            try {
+                console.log('[DEBUG] Criando fetch request para /meus_pedidos');
+                
+                // Cria uma promise com timeout
+                const fetchPromise = fetch('/meus_pedidos', { 
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                // Timeout de 30 segundos
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout ao carregar pedidos (30s)')), 30000)
+                );
+                
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                console.log('[DEBUG] Response recebido, status:', response.status);
+                console.log('[DEBUG] Response headers:', response.headers.get('Content-Type'));
+                
+                let data;
+                try {
+                    data = await response.json();
+                    console.log('[DEBUG] JSON parseado:', data);
+                } catch (parseErr) {
+                    console.error('[ERROR] Falha ao parsear JSON:', parseErr);
+                    container.innerHTML = `<p class="text-danger mb-0">Erro: resposta inválida do servidor (${parseErr.message})</p>`;
+                    return;
+                }
+
+                if (!response.ok) {
+                    const erro = data.erro || `Erro HTTP ${response.status}`;
+                    console.error('[ERROR] Resposta não OK:', erro);
+                    container.innerHTML = `<p class="text-danger mb-0">Erro ao carregar pedidos: ${erro}</p>`;
+                    return;
+                }
+
+                if (!Array.isArray(data)) {
+                    console.error('[ERROR] Resposta não é um array:', typeof data, data);
+                    container.innerHTML = `<p class="text-danger mb-0">Erro: resposta inesperada (${typeof data})</p>`;
+                    return;
+                }
+                
+                if (data.length === 0) {
+                    console.log('[INFO] Nenhum pedido encontrado');
+                    container.innerHTML = '<p class="text-muted mb-0">Você ainda não fez pedidos.</p>';
+                    return;
+                }
+                
+                console.log('[INFO] Pedidos carregados:', data.length);
+
+                container.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Data</th>
+                                    <th>Status</th>
+                                    <th>Valor</th>
+                                    <th class="text-center">Itens</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(pedido => `
+                                    <tr>
+                                        <td>#${pedido.id}</td>
+                                        <td>${formatarDataPedido(pedido.data_pedido)}</td>
+                                        <td>${pedido.status}</td>
+                                        <td>R$ ${formatarMoeda(pedido.valor_total)}</td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="verItensPedido(${pedido.id})">
+                                                Ver itens (${pedido.quantidade_itens})
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                console.log('[INFO] Tabela de pedidos renderizada com sucesso');
+                
+            } catch (error) {
+                console.error('[ERROR] Exceção ao carregar pedidos:', error);
+                console.error('[ERROR] Stack:', error.stack);
+                container.innerHTML = `<p class="text-danger mb-0"><strong>Erro:</strong> ${error.message || 'falha de conexão'}</p>`;
+            }
+        }
+
+        async function carregarRelatorioVendas() {
+            const resumo = document.getElementById('resumoRelatorioVendas');
+            const conteudo = document.getElementById('conteudoRelatorioVendas');
+            if (!resumo || !conteudo) {
+                return;
+            }
+
+            const clienteId = document.getElementById('relatorioCliente')?.value || '';
+            const dataInicio = document.getElementById('relatorioDataInicio')?.value || '';
+            const dataFim = document.getElementById('relatorioDataFim')?.value || '';
+
+            if (dataInicio && dataFim && dataInicio > dataFim) {
+                resumo.innerHTML = '<span class="text-danger">A data inicial não pode ser maior que a data final.</span>';
+                return;
+            }
+
+            resumo.textContent = 'Carregando relatório...';
+            conteudo.innerHTML = '<p class="text-muted mb-0">Buscando vendas...</p>';
+
+            try {
+                const params = new URLSearchParams();
+                if (clienteId) {
+                    params.set('cliente_id', clienteId);
+                }
+                if (dataInicio) {
+                    params.set('data_inicio', dataInicio);
+                }
+                if (dataFim) {
+                    params.set('data_fim', dataFim);
+                }
+
+                const response = await fetch(`/relatorio_vendas?${params.toString()}`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.erro || 'Falha ao carregar relatório');
+                }
+
+                const pedidos = Array.isArray(data.pedidos) ? data.pedidos : [];
+                const resumoApi = data.resumo || {};
+                resumo.innerHTML = `
+                    <strong>Pedidos:</strong> ${resumoApi.quantidade_pedidos || 0} |
+                    <strong>Total vendido:</strong> R$ ${formatarMoeda(resumoApi.valor_total || 0)}
+                `;
+
+                if (pedidos.length === 0) {
+                    conteudo.innerHTML = '<p class="text-muted mb-0">Nenhuma venda encontrada para o período informado.</p>';
+                    return;
+                }
+
+                conteudo.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>Data</th>
+                                    <th>Status</th>
+                                    <th>Valor</th>
+                                    <th class="text-center">Itens</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${pedidos.map((pedido) => `
+                                    <tr>
+                                        <td>#${pedido.id}</td>
+                                        <td>${pedido.cliente_nome || '-'}</td>
+                                        <td>${formatarDataPedido(pedido.data_pedido)}</td>
+                                        <td>${pedido.status}</td>
+                                        <td>R$ ${formatarMoeda(pedido.valor_total)}</td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="verItensPedido(${pedido.id}, 'itensRelatorioContainer')">
+                                                Ver itens (${pedido.quantidade_itens})
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (erro) {
+                resumo.innerHTML = `<span class="text-danger">${erro.message || erro}</span>`;
+                conteudo.innerHTML = '<p class="text-muted mb-0">Falha ao montar o relatório.</p>';
+            }
+        }
+
+        async function verItensPedido(pedidoId, containerId = 'itensPedidoContainer') {
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.error('[ERROR] Container não encontrado!');
+                return;
+            }
+            
+            container.innerHTML = '<p class="text-muted mb-0">Carregando itens do pedido...</p>';
+            console.log('[DEBUG] Carregando itens do pedido:', pedidoId);
+
+            try {
+                // Fetch com timeout
+                const fetchPromise = fetch(`/meus_pedidos/${pedidoId}/itens`, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout ao carregar itens (30s)')), 30000)
+                );
+                
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                console.log('[DEBUG] Response status:', response.status);
+                
+                let data;
+                try {
+                    data = await response.json();
+                    console.log('[DEBUG] JSON parseado:', data);
+                } catch (parseErr) {
+                    console.error('[ERROR] Falha ao parsear JSON:', parseErr);
+                    container.innerHTML = `<p class="text-danger mb-0">Erro: resposta inválida (${parseErr.message})</p>`;
+                    return;
+                }
+
+                if (!response.ok) {
+                    const erro = data.erro || `Erro HTTP ${response.status}`;
+                    console.error('[ERROR] Falha ao carregar itens:', erro);
+                    container.innerHTML = `<p class="text-danger mb-0">Erro ao carregar itens: ${erro}</p>`;
+                    return;
+                }
+
+                const itens = Array.isArray(data.itens) ? data.itens : [];
+                if (itens.length === 0) {
+                    console.log('[INFO] Pedido sem itens:', pedidoId);
+                    container.innerHTML = `<p class="text-muted mb-0">O pedido #${pedidoId} não possui itens.</p>`;
+                    return;
+                }
+                console.log('[INFO] Itens carregados:', itens.length);
+
+                container.innerHTML = `
+                    <h6 class="mb-2">Itens do Pedido #${data.pedido_id}</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-2">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Referência</th>
+                                    <th>Quantidade</th>
+                                    <th>Desc. (%)</th>
+                                    <th>Valor Unit.</th>
+                                    <th>Valor Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itens.map(item => {
+                                    const desc = parseFloat(item.desconto || 0);
+                                    const valUnit = parseFloat(item.valor_unitario);
+                                    const valUnitDesc = desc > 0 ? valUnit * (1 - (desc / 100)) : valUnit;
+                                    const htmlUnit = desc > 0
+                                        ? `<span class="text-decoration-line-through text-muted small me-1">R$ ${formatarMoeda(valUnit)}</span> <strong>R$ ${formatarMoeda(valUnitDesc)}</strong>`
+                                        : `R$ ${formatarMoeda(valUnit)}`;
+                                    return `
+                                    <tr>
+                                        <td>${item.referencia_produto}</td>
+                                        <td>${item.quantidade}</td>
+                                        <td>${desc > 0 ? desc + '%' : '-'}</td>
+                                        <td>${htmlUnit}</td>
+                                        <td>R$ ${formatarMoeda(item.valor_total)}</td>
+                                    </tr>
+                                `; }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="mb-0"><strong>Valor total do pedido:</strong> R$ ${formatarMoeda(data.valor_total)}</p>
+                `;
+                
+                console.log('[INFO] Tabela de itens renderizada com sucesso');
+                
+            } catch (error) {
+                console.error('[ERROR] Exceção ao carregar itens:', error);
+                console.error('[ERROR] Stack:', error.stack);
+                container.innerHTML = `<p class="text-danger mb-0"><strong>Erro:</strong> ${error.message || 'falha de conexão'}</p>`;
+            }
+        }
+
+        function limparItensPedido() {
+            document.getElementById('itensPedidoContainer').innerHTML = '<p class="text-muted mb-0">Selecione um pedido para ver os itens.</p>';
+        }
+
+        // Função para carregar produtos do backend
+        async function carregarProdutos() {
+            try {
+                const response = await fetch('/carregar_produtos');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    produtosDisponiveis = data;
+                    sincronizarListaProdutos();
+                } else {
+                    alert('Erro ao carregar produtos: ' + (data.erro || 'Desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao carregar produtos');
+            }
+        }
+
+        // Função para preencher o select com produtos
+        function preencherSelectProdutos(filtro = '') {
+            const select = document.getElementById('selectProduto');
+            select.innerHTML = '<option value="">Selecione um produto...</option>';
+
+            produtosFiltradosDisponiveis(filtro).forEach((produto, index) => {
+                const indiceOriginal = produtosDisponiveis.findIndex((item) => item.referencia === produto.referencia);
+
+                const option = document.createElement('option');
+                option.value = indiceOriginal;
+                const valor = parseFloat(produto.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const descricaoTexto = produto.descricao ? ` - ${produto.descricao}` : '';
+                option.textContent = `${produto.referencia}${descricaoTexto} - R$ ${valor}`;
+                select.appendChild(option);
+            });
+
+            if (select.options.length === 1) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'Nenhum produto encontrado';
+                select.appendChild(option);
+            }
+        }
+
+        function renderizarListaSelecaoProdutos(filtro = '') {
+            const tbody = document.getElementById('listaSelecaoProdutos');
+            if (!tbody) {
+                return;
+            }
+
+            const produtos = produtosFiltradosDisponiveis(filtro);
+            if (produtos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Nenhum produto disponível para seleção.</td></tr>';
+                return;
+            }
+
+            const descontoGeral = parseFloat(document.getElementById('descontoGeralBloco')?.value || '0') || 0;
+
+            tbody.innerHTML = produtos.map((produto, index) => {
+                const valUnit = parseFloat(produto.valor);
+                const valFinal = descontoGeral > 0 ? valUnit * (1 - (descontoGeral / 100)) : valUnit;
+                const htmlValor = descontoGeral > 0
+                    ? `<span class="text-decoration-line-through text-muted small me-1">R$ ${formatarMoeda(valUnit)}</span><br><strong class="text-success">R$ ${formatarMoeda(valFinal)}</strong>`
+                    : `R$ ${formatarMoeda(valUnit)}`;
+
+                return `
+                <tr>
+                    <td class="text-center">
+                        <input class="form-check-input produto-multiplo-checkbox" type="checkbox" data-referencia="${produto.referencia}" id="produto-multiplo-${index}">
+                    </td>
+                    <td>
+                        <label class="form-check-label" for="produto-multiplo-${index}">
+                            <strong>${produto.referencia}</strong><br>
+                            <span class="text-muted small">${produto.descricao || '-'}</span>
+                        </label>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm produto-multiplo-quantidade" min="1" value="1" data-referencia="${produto.referencia}">
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm produto-multiplo-desconto" min="0" max="100" step="0.1" value="${descontoGeral}" placeholder="0" data-referencia="${produto.referencia}">
+                    </td>
+                    <td class="produto-multiplo-valor-cell">${htmlValor}</td>
+                </tr>
+            `; }).join('');
+        }
+
+        // Aplicação de desconto em bloco para todos os itens visíveis
+        document.getElementById('btnAplicarDescontoBloco')?.addEventListener('click', function() {
+            const descontoGeral = Math.max(0, Math.min(100, parseFloat(document.getElementById('descontoGeralBloco')?.value || '0')));
+            document.querySelectorAll('.produto-multiplo-desconto').forEach(input => {
+                input.value = descontoGeral;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        });
+
+        // Event listener na tabela de seleção múltipla para atualizar preview de preços ao alterar quantidade/desconto
+        document.getElementById('listaSelecaoProdutos')?.addEventListener('input', function(e) {
+            if (e.target.classList.contains('produto-multiplo-desconto') || e.target.classList.contains('produto-multiplo-quantidade')) {
+                const linha = e.target.closest('tr');
+                if (!linha) return;
+                const checkbox = linha.querySelector('.produto-multiplo-checkbox');
+                if (!checkbox) return;
+                const referencia = checkbox.dataset.referencia;
+                const produto = produtosDisponiveis.find(item => item.referencia === referencia);
+                if (!produto) return;
+
+                const descInput = linha.querySelector('.produto-multiplo-desconto');
+                const cellValor = linha.querySelector('.produto-multiplo-valor-cell');
+                const desc = Math.max(0, Math.min(100, parseFloat(descInput?.value || '0')));
+                const valUnit = parseFloat(produto.valor);
+                const valFinal = valUnit * (1 - (desc / 100));
+
+                if (cellValor) {
+                    if (desc > 0) {
+                        cellValor.innerHTML = `<span class="text-decoration-line-through text-muted small me-1">R$ ${formatarMoeda(valUnit)}</span><br><strong class="text-success">R$ ${formatarMoeda(valFinal)}</strong>`;
+                    } else {
+                        cellValor.innerHTML = `R$ ${formatarMoeda(valUnit)}`;
+                    }
+                }
+            }
+        });
+
+        // Filtro de produto em tempo real
+        document.getElementById('filtroProduto').addEventListener('input', function() {
+            sincronizarListaProdutos();
+            document.getElementById('cardDetalhesProduto').style.display = 'none';
+        });
+
+        function obterProdutoSelecionado() {
+            const indice = document.getElementById('selectProduto').value;
+            if (indice === '') {
+                return null;
+            }
+            return produtosDisponiveis[parseInt(indice, 10)] || null;
+        }
+
+        // Evento para atualizar detalhes quando seleciona um produto
+        document.getElementById('selectProduto').addEventListener('change', function() {
+            const produto = obterProdutoSelecionado();
+            if (produto) {
+                exibirDetalhesProduto(produto);
+                atualizarValorTotal();
+            } else {
+                document.getElementById('cardDetalhesProduto').style.display = 'none';
+            }
+        });
+
+        // Função para exibir detalhes do produto
+        function exibirDetalhesProduto(produto) {
+            const quantidadeInput = document.getElementById('quantidadeProduto');
+            const descontoInput = document.getElementById('descontoProduto');
+            const quantidade = parseInt(quantidadeInput?.value || '1', 10);
+            const desconto = Math.max(0, Math.min(100, parseFloat(descontoInput?.value || '0')));
+
+            const valorUnitario = parseFloat(produto.valor);
+            const valorUnitarioComDesconto = valorUnitario * (1 - (desconto / 100));
+            const valorTotal = valorUnitarioComDesconto * quantidade;
+            
+            const valorFormat = valorUnitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const valorDescFormat = valorUnitarioComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const valorTotalFormat = valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const qtdEmbFormat = parseFloat(produto.quantidade_embalagem).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            document.getElementById('detalheReferencia').textContent = produto.referencia;
+            document.getElementById('detalheDescricao').textContent = produto.descricao || '-';
+            document.getElementById('detalheQuantidadeEmbalagem').textContent = qtdEmbFormat;
+            document.getElementById('detalheValor').textContent = `R$ ${valorFormat}`;
+
+            const linhaDesconto = document.getElementById('linhaDetalheDesconto');
+            const linhaValorComDesconto = document.getElementById('linhaDetalheValorComDesconto');
+
+            if (desconto > 0) {
+                if (linhaDesconto) {
+                    document.getElementById('detalheDesconto').textContent = `${desconto}%`;
+                    linhaDesconto.style.display = '';
+                }
+                if (linhaValorComDesconto) {
+                    document.getElementById('detalheValorComDesconto').textContent = `R$ ${valorDescFormat}`;
+                    linhaValorComDesconto.style.display = '';
+                }
+            } else {
+                if (linhaDesconto) linhaDesconto.style.display = 'none';
+                if (linhaValorComDesconto) linhaValorComDesconto.style.display = 'none';
+            }
+
+            document.getElementById('detalheValorTotal').textContent = `R$ ${valorTotalFormat}`;
+            document.getElementById('cardDetalhesProduto').style.display = 'block';
+        }
+
+        // Listener para atualizar valor e detalhes quando altera quantidade ou desconto
+        document.getElementById('quantidadeProduto').addEventListener('change', function() {
+            const produto = obterProdutoSelecionado();
+            if (produto) {
+                exibirDetalhesProduto(produto);
+                atualizarValorTotal();
+            }
+        });
+
+        document.getElementById('descontoProduto')?.addEventListener('input', function() {
+            const produto = obterProdutoSelecionado();
+            if (produto) {
+                exibirDetalhesProduto(produto);
+                atualizarValorTotal();
+            }
+        });
+
+        // Botão Ver Detalhes
+        document.getElementById('btnVerDetalhes').addEventListener('click', function() {
+            const produto = obterProdutoSelecionado();
+            if (!produto) {
+                alert('Por favor, selecione um produto primeiro');
+                return;
+            }
+            exibirDetalhesProduto(produto);
+        });
+
+        // Botão Adicionar Produto
+        document.getElementById('btnAdicionarProduto').addEventListener('click', function() {
+            const quantidade = parseInt(document.getElementById('quantidadeProduto').value, 10);
+            const desconto = parseFloat(document.getElementById('descontoProduto')?.value || '0');
+            const produto = obterProdutoSelecionado();
+            
+            if (!produto) {
+                alert('Por favor, selecione um produto');
+                return;
+            }
+            
+            if (quantidade <= 0) {
+                alert('Quantidade deve ser maior que zero');
+                return;
+            }
+            
+            adicionarProdutoAoPedido(produto, quantidade, desconto);
+            
+            // Limpa os campos
+            document.getElementById('filtroProduto').value = '';
+            sincronizarListaProdutos();
+            document.getElementById('selectProduto').value = '';
+            document.getElementById('quantidadeProduto').value = '1';
+            if (document.getElementById('descontoProduto')) document.getElementById('descontoProduto').value = '0';
+            document.getElementById('cardDetalhesProduto').style.display = 'none';
+        });
+
+        document.getElementById('btnAdicionarSelecionados').addEventListener('click', function() {
+            const selecionados = Array.from(document.querySelectorAll('.produto-multiplo-checkbox:checked'));
+            if (selecionados.length === 0) {
+                alert('Selecione pelo menos um produto na lista múltipla.');
+                return;
+            }
+
+            // Captura os dados antes de atualizar a lista para não perder as quantidades e descontos digitados.
+            const itensSelecionados = selecionados.map((checkbox) => {
+                const referencia = checkbox.dataset.referencia;
+                const produto = produtosDisponiveis.find((item) => item.referencia === referencia);
+                const linha = checkbox.closest('tr');
+                const quantidadeInput = linha ? linha.querySelector('.produto-multiplo-quantidade') : null;
+                const descontoInput = linha ? linha.querySelector('.produto-multiplo-desconto') : null;
+                const quantidade = parseInt(quantidadeInput?.value || '1', 10);
+                const desconto = parseFloat(descontoInput?.value || '0');
+
+                return { produto, quantidade, desconto };
+            });
+
+            itensSelecionados.forEach(({ produto, quantidade, desconto }) => {
+                if (produto && quantidade > 0) {
+                    adicionarProdutoAoPedido(produto, quantidade, desconto);
+                }
+            });
+
+            document.getElementById('filtroProduto').value = '';
+            document.getElementById('quantidadeProduto').value = '1';
+            if (document.getElementById('descontoProduto')) document.getElementById('descontoProduto').value = '0';
+            if (document.getElementById('descontoGeralBloco')) document.getElementById('descontoGeralBloco').value = '0';
+            document.getElementById('cardDetalhesProduto').style.display = 'none';
+            sincronizarListaProdutos();
+        });
+
+        // Função para adicionar produto ao pedido temporário
+        function adicionarProdutoAoPedido(produto, quantidade, desconto = 0) {
+            const valorUnitario = parseFloat(produto.valor);
+            const percDesconto = Math.max(0, Math.min(100, parseFloat(desconto || 0)));
+            const valorUnitarioComDesconto = valorUnitario * (1 - (percDesconto / 100));
+            const valorTotal = valorUnitarioComDesconto * quantidade;
+            
+            // Verifica se o produto com o mesmo desconto já foi adicionado
+            const produtoExistente = pedidoTemporario.find(item => item.referencia_produto === produto.referencia && Math.abs((item.desconto || 0) - percDesconto) < 0.01);
+            
+            if (produtoExistente) {
+                produtoExistente.quantidade += quantidade;
+                produtoExistente.valor_total = produtoExistente.quantidade * produtoExistente.valor_unitario_com_desconto;
+            } else {
+                pedidoTemporario.push({
+                    referencia_produto: produto.referencia,
+                    descricao: produto.descricao,
+                    quantidade_embalagem: produto.quantidade_embalagem,
+                    quantidade: quantidade,
+                    desconto: percDesconto,
+                    valor_unitario: valorUnitario,
+                    valor_unitario_com_desconto: valorUnitarioComDesconto,
+                    valor_total: valorTotal
+                });
+            }
+            
+            atualizarTabelaProdutos();
+            atualizarValorTotal();
+            sincronizarListaProdutos();
+        }
+
+        // Função para atualizar a tabela de produtos
+        function atualizarTabelaProdutos() {
+            const tbody = document.getElementById('corpoTabelaProdutos');
+            
+            if (pedidoTemporario.length === 0) {
+                tbody.innerHTML = '<tr id="linhaVazia"><td colspan="8" class="text-center text-muted py-3">Nenhum produto adicionado</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = pedidoTemporario.map((produto, index) => {
+                const qtdEmb = parseFloat(produto.quantidade_embalagem).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const desconto = parseFloat(produto.desconto || 0);
+                const valorUnitOrig = produto.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const valorUnitComDesc = (produto.valor_unitario_com_desconto || produto.valor_unitario).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const valorTot = produto.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                let htmlValorUnit = `R$ ${valorUnitOrig}`;
+                if (desconto > 0) {
+                    htmlValorUnit = `<span class="text-decoration-line-through text-muted small me-1">R$ ${valorUnitOrig}</span><br><strong>R$ ${valorUnitComDesc}</strong>`;
+                }
+
+                const htmlDesconto = desconto > 0 ? `<span class="badge bg-success">${desconto}%</span>` : '-';
+
+                return `
+                <tr>
+                    <td>${produto.referencia_produto}</td>
+                    <td>${produto.descricao}</td>
+                    <td>${qtdEmb}</td>
+                    <td>${produto.quantidade}</td>
+                    <td>${htmlDesconto}</td>
+                    <td>${htmlValorUnit}</td>
+                    <td>R$ ${valorTot}</td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removerProduto(${index})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `; }).join('');
+        }
+
+        // Função para remover produto
+        function removerProduto(index) {
+            pedidoTemporario.splice(index, 1);
+            atualizarTabelaProdutos();
+            atualizarValorTotal();
+            sincronizarListaProdutos();
+        }
+
+        // Função para atualizar valor total
+        function atualizarValorTotal() {
+            const valorTotal = pedidoTemporario.reduce((total, item) => total + item.valor_total, 0);
+            const valorTotalFormat = valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('valorTotalPedido').textContent = `R$ ${valorTotalFormat}`;
+        }
+
+        // Botão Finalizar Pedido
+        document.getElementById('btnFinalizarPedido').addEventListener('click', async function() {
+            if (pedidoTemporario.length === 0) {
+                alert('Por favor, adicione pelo menos um produto ao pedido');
+                return;
+            }
+            
+            // Confirma antes de enviar
+            if (!confirm('Tem certeza que deseja finalizar o pedido?')) {
+                return;
+            }
+            
+            const clienteId = document.getElementById('selectClientePedido')?.value || currentUserId;
+
+            try {
+                const response = await fetch('/salvar_pedido', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ cliente_id: clienteId, itens: pedidoTemporario })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const valorTotalFormat = parseFloat(data.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    alert(`Pedido realizado com sucesso!\nID do Pedido: ${data.pedido_id}\nValor Total: R$ ${valorTotalFormat}`);
+                    
+                    // Limpa o pedido temporário
+                    limparPedidoTemporario();
+                    
+                    // Fecha o modal
+                    bootstrap.Modal.getInstance(document.getElementById('modalPedido')).hide();
+                } else if (response.status === 503) {
+                    salvarPedidoOffline({ cliente_id: clienteId, itens: pedidoTemporario });
+                    limparPedidoTemporario();
+                    bootstrap.Modal.getInstance(document.getElementById('modalPedido')).hide();
+                    alert('Sem conexão com o servidor. O pedido foi salvo localmente para reenvio posterior.');
+                } else {
+                    alert('Erro ao finalizar pedido: ' + (data.erro || 'Desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                salvarPedidoOffline({ cliente_id: clienteId, itens: pedidoTemporario });
+                limparPedidoTemporario();
+                bootstrap.Modal.getInstance(document.getElementById('modalPedido')).hide();
+                alert('Falha de conexão. O pedido foi salvo localmente para reenvio posterior.');
+            }
+        });
+
+        const btnReenviarTodosPendentes = document.getElementById('btnReenviarTodosPendentes');
+        if (btnReenviarTodosPendentes) {
+            btnReenviarTodosPendentes.addEventListener('click', function() {
+                reenviarTodosPendentes();
+            });
+        }
+
+        const btnFiltrarRelatorio = document.getElementById('btnFiltrarRelatorio');
+        if (btnFiltrarRelatorio) {
+            btnFiltrarRelatorio.addEventListener('click', function() {
+                carregarRelatorioVendas();
+            });
+        }
+
+        const selectClienteEdicao = document.getElementById('selectClienteEdicao');
+        if (selectClienteEdicao) {
+            selectClienteEdicao.addEventListener('change', function() {
+                preencherFormularioCliente();
+            });
+        }
+
+        const btnSalvarCliente = document.getElementById('btnSalvarCliente');
+        if (btnSalvarCliente) {
+            btnSalvarCliente.addEventListener('click', async function() {
+                const clienteId = document.getElementById('selectClienteEdicao')?.value;
+                if (!clienteId) {
+                    alert('Selecione um cliente para salvar.');
+                    return;
+                }
+
+                const payload = {
+                    nome: document.getElementById('clienteNome').value.trim(),
+                    email: document.getElementById('clienteEmail').value.trim(),
+                    celular: document.getElementById('clienteCelular').value.trim(),
+                    cnpj: document.getElementById('clienteCnpj').value.trim(),
+                    senha: document.getElementById('clienteSenha').value.trim(),
+                    empresas: document.getElementById('clienteEmpresas').value.trim(),
+                    empresa_ativa: document.getElementById('clienteEmpresaAtiva').value.trim(),
+                    perm_download_tabelas: document.getElementById('clientePermTabela').checked,
+                    perm_fazer_pedido: document.getElementById('clientePermPedido').checked,
+                    perm_solicitar_visita: document.getElementById('clientePermVisita').checked,
+                    perm_visualizar_pedidos: document.getElementById('clientePermVisualizar').checked,
+                };
+
+                try {
+                    const response = await fetch(`/clientes/${clienteId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.erro || 'Falha ao salvar cliente');
+                    }
+
+                    document.getElementById('mensagemEditarCliente').textContent = 'Cadastro atualizado com sucesso.';
+                    await carregarClientes(true);
+                } catch (erro) {
+                    document.getElementById('mensagemEditarCliente').textContent = erro.message || erro;
+                }
+            });
+        }
+    </script>
+</body>
+</html>

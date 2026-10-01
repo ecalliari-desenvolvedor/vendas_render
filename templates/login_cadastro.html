@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Acesso</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Bootstrap CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f0f0f;
+            color: #fff;
+        }
+
+        .card {
+            background: #1a1a1a;
+            border: 1px solid rgba(29, 209, 161, 0.25);
+            color: #fff;
+        }
+
+        .card-header-custom {
+            background: #1a1a1a;
+            color: #1dd1a1;
+            border-bottom: 1px solid rgba(29, 209, 161, 0.25);
+        }
+
+        .nav-tabs {
+            border-bottom: 1px solid rgba(29, 209, 161, 0.25);
+        }
+
+        .nav-tabs .nav-link {
+            color: #fff;
+            border: none;
+        }
+
+        .nav-tabs .nav-link:hover,
+        .nav-tabs .nav-link:focus {
+            color: #1dd1a1;
+        }
+
+        .nav-tabs .nav-link.active {
+            color: #1dd1a1;
+            background: #1a1a1a;
+            border: 1px solid rgba(29, 209, 161, 0.25);
+            border-bottom-color: transparent;
+        }
+
+        .form-label,
+        .form-check-label {
+            color: #fff;
+        }
+
+        .text-muted {
+            color: #bbb !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <!-- Nav tabs -->
+                <ul class="nav nav-tabs mb-3" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login" type="button">Login</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cadastro-tab" data-bs-toggle="tab" data-bs-target="#cadastro" type="button">Cadastro</button>
+                    </li>
+                </ul>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="alert alert-danger" role="alert">
+                            {% for category, message in messages %}
+                                {{ message }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Tab content -->
+                <div class="tab-content" id="myTabContent">
+                    <!-- Login Tab -->
+                    <div class="tab-pane fade show active" id="login" role="tabpanel">
+                        <div class="card shadow">
+                            <div class="card-header card-header-custom">
+                                <h4 class="mb-0">Login</h4>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="{{ url_for('login') }}">
+                                    <div class="mb-3">
+                                        <label for="email-login" class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="email-login" name="email" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="cnpj-login" class="form-label">CNPJ</label>
+                                        <input type="text" class="form-control" id="cnpj-login" name="cnpj" maxlength="18" placeholder="00.000.000/0000-00" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="senha" class="form-label">Senha</label>
+                                        <input type="password" class="form-control" id="senha" name="senha" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100">Entrar</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cadastro Tab -->
+                    <div class="tab-pane fade" id="cadastro" role="tabpanel">
+                        <div class="card shadow">
+                            <div class="card-header card-header-custom">
+                                <h4 class="mb-0">Cadastro de Usuário</h4>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" action="{{ url_for('adicionar') }}">
+                                    <div class="mb-3">
+                                        <label for="nome" class="form-label">Nome</label>
+                                        <input type="text" class="form-control" id="nome" name="nome" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="email" class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="email" name="email" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="cnpj" class="form-label">CNPJ</label>
+                                        <input type="text" class="form-control" id="cnpj" name="cnpj" maxlength="18" placeholder="00.000.000/0000-00" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="celular" class="form-label">Celular</label>
+                                        <input type="tel" class="form-control" id="celular" name="celular" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="senha-cadastro" class="form-label">Senha</label>
+                                        <input type="password" class="form-control" id="senha-cadastro" name="senha" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Empresas habilitadas</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="empresas" id="empresa-varejo" value="Varejo" checked>
+                                            <label class="form-check-label" for="empresa-varejo">Varejo</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="empresas" id="empresa-redemac" value="Redemac">
+                                            <label class="form-check-label" for="empresa-redemac">Redemac</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="empresas" id="empresa-alternativa" value="Alternativa">
+                                            <label class="form-check-label" for="empresa-alternativa">Alternativa</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="empresas" id="empresa-granteck" value="Granteck">
+                                            <label class="form-check-label" for="empresa-granteck">Granteck</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="empresas" id="empresa-especial" value="Especial">
+                                            <label class="form-check-label" for="empresa-especial">Especial</label>
+                                        </div>
+                                        <small class="text-muted">Selecione uma ou mais empresas para este usuário.</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Permissões de telas</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="perm_download_tabelas" id="perm-download" checked>
+                                            <label class="form-check-label" for="perm-download">Download Tabelas</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="perm_fazer_pedido" id="perm-pedido" checked>
+                                            <label class="form-check-label" for="perm-pedido">Fazer Pedido</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="perm_solicitar_visita" id="perm-visita" checked>
+                                            <label class="form-check-label" for="perm-visita">Solicitar Visita</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="perm_visualizar_pedidos" id="perm-visualizar" checked>
+                                            <label class="form-check-label" for="perm-visualizar">Visualizar Pedidos</label>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100">Cadastrar</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Bootstrap JS Bundle CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
