@@ -28,11 +28,12 @@ produtos_cache = {}
 
 EMPRESAS_DISPONIVEIS = ['Varejo', 'Redemac', 'Alternativa', 'Granteck', 'Especial']
 
-SMTP_HOST = os.getenv('SMTP_HOST', 'smtp.gmail.com').strip()
-SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
-SMTP_USER = os.getenv('SMTP_USER', 'ecalliari@gmail.com').strip()
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', 'ahtl licw snuv tfzw')
-SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'true').strip().lower() in ('1', 'true', 'yes', 'on')
+SMTP_HOST = (os.getenv('SMTP_HOST') or 'smtp.gmail.com').strip()
+SMTP_PORT = int((os.getenv('SMTP_PORT') or '587').strip())
+SMTP_USER = (os.getenv('SMTP_USER') or 'ecalliari@gmail.com').strip()
+SMTP_PASSWORD = (os.getenv('SMTP_PASSWORD') or 'ahtl licw snuv tfzw').strip()
+SMTP_USE_TLS = (os.getenv('SMTP_USE_TLS') or 'true').strip().lower() in ('1', 'true', 'yes', 'on')
+
 
 
 # Modelos do Banco de Dados
@@ -476,10 +477,22 @@ def pode_acessar_pedido(usuario_solicitante, pedido):
 
 
 def enviar_email_pedido_admin(usuario, pedido, itens):
-    if not usuario.email:
-        raise RuntimeError('Usuário sem email para receber confirmação do pedido.')
+    recipientes = []
+    if usuario and usuario.email and '@' in usuario.email and not usuario.email.endswith('.local'):
+        recipientes.append(usuario.email)
 
-    assunto = f'Confirmacao do pedido #{pedido.id} - {usuario.nome}'
+    if SMTP_USER and SMTP_USER not in recipientes and '@' in SMTP_USER:
+        recipientes.append(SMTP_USER)
+
+    if not recipientes:
+        if usuario and usuario.email:
+            recipientes.append(usuario.email)
+        elif SMTP_USER:
+            recipientes.append(SMTP_USER)
+        else:
+            raise RuntimeError('Usuário sem email válido para receber confirmação do pedido.')
+
+    assunto = f'Confirmacao do pedido #{pedido.id} - {usuario.nome if usuario else "Cliente"}'
     linhas_itens = []
     for item in itens:
         desconto = float(item.get('desconto', 0.0) or 0.0)
@@ -498,12 +511,12 @@ def enviar_email_pedido_admin(usuario, pedido, itens):
         f"Data: {pedido.data_pedido.strftime('%d/%m/%Y %H:%M:%S')}\n"
         f"Valor total: R$ {pedido.valor_total:.2f}\n\n"
         f"Dados do cliente:\n"
-        f"Nome: {usuario.nome}\n"
-        f"Email: {usuario.email}\n"
-        f"CNPJ: {usuario.cnpj}\n"
-        f"Celular: {usuario.celular or '-'}\n"
-        f"Empresa ativa: {usuario.empresa_ativa}\n"
-        f"Empresas habilitadas: {usuario.associacoes}\n\n"
+        f"Nome: {usuario.nome if usuario else '-'}\n"
+        f"Email: {usuario.email if usuario else '-'}\n"
+        f"CNPJ: {usuario.cnpj if usuario else '-'}\n"
+        f"Celular: {(usuario.celular if usuario else None) or '-'}\n"
+        f"Empresa ativa: {usuario.empresa_ativa if usuario else '-'}\n"
+        f"Empresas habilitadas: {usuario.associacoes if usuario else '-'}\n\n"
         f"Itens do pedido:\n"
         f"{'\n'.join(linhas_itens)}\n"
     )
@@ -511,18 +524,38 @@ def enviar_email_pedido_admin(usuario, pedido, itens):
     mensagem = EmailMessage()
     mensagem['Subject'] = assunto
     mensagem['From'] = SMTP_USER or 'no-reply@sistema.local'
-    mensagem['To'] = usuario.email
+    mensagem['To'] = ', '.join(recipientes)
     mensagem.set_content(corpo)
 
     if not SMTP_HOST:
         raise RuntimeError('SMTP_HOST não configurado para envio de email.')
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as servidor:
-        if SMTP_USE_TLS:
-            servidor.starttls()
-        if SMTP_USER and SMTP_PASSWORD:
-            servidor.login(SMTP_USER, SMTP_PASSWORD)
-        servidor.send_message(mensagem)
+    senha_limpa = SMTP_PASSWORD.replace(' ', '').strip()
+
+    try:
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as servidor:
+                if SMTP_USER and senha_limpa:
+                    servidor.login(SMTP_USER, senha_limpa)
+                servidor.send_message(mensagem)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as servidor:
+                if SMTP_USE_TLS:
+                    servidor.starttls()
+                if SMTP_USER and senha_limpa:
+                    servidor.login(SMTP_USER, senha_limpa)
+                servidor.send_message(mensagem)
+    except Exception as err_principal:
+        if SMTP_PORT != 465:
+            try:
+                with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=30) as servidor:
+                    if SMTP_USER and senha_limpa:
+                        servidor.login(SMTP_USER, senha_limpa)
+                    servidor.send_message(mensagem)
+                return
+            except Exception:
+                pass
+        raise err_principal
 
 
 # Rotas Principais do Frontend (Interface Web)
@@ -545,16 +578,22 @@ def login():
     cnpj = normalizar_cnpj(payload.get('cnpj'))
     senha = payload.get('senha')
 
-    if not all([email, cnpj, senha]):
-        erro = 'Email, CNPJ e senha são obrigatórios.'
+    if not all([email, senha]):
+        erro = 'Email e senha são obrigatórios.'
         if is_json:
             return jsonify({'erro': erro}), 400
         flash(erro, 'error')
         return render_template('login_cadastro.html', error=erro)
 
-    usuario = Usuario.query.filter_by(email=email, cnpj=cnpj).first()
+    usuario = None
+    if cnpj:
+        usuario = Usuario.query.filter_by(email=email, cnpj=cnpj).first()
+
     if usuario is None:
-        erro = 'Usuário não encontrado para este email e CNPJ.'
+        usuario = Usuario.query.filter_by(email=email).first()
+
+    if usuario is None:
+        erro = 'Usuário não encontrado para este email.'
         if is_json:
             return jsonify({'erro': erro}), 404
         flash(erro, 'error')
@@ -1145,6 +1184,8 @@ def salvar_pedido():
             try:
                 enviar_email_pedido_admin(usuario, novo_pedido, itens)
             except Exception as email_error:
+                import sys
+                print(f"[ERRO EMAIL] Falha ao enviar email do pedido #{novo_pedido.id}: {email_error}", file=sys.stderr, flush=True)
                 aviso_email = f'Pedido salvo, mas não foi possível enviar email: {str(email_error)}'
 
         return jsonify({
@@ -1376,6 +1417,41 @@ def atualizar_cliente(cliente_id):
         session['user_data'] = usuario_serializado
 
     return jsonify(usuario_serializado), 200
+
+
+@app.route('/clientes/<int:cliente_id>', methods=['DELETE'])
+@app.route('/usuarios/<int:cliente_id>', methods=['DELETE'])
+def deletar_cliente(cliente_id):
+    if 'user_data' not in session and not request.json.get('usuario_id'):
+        return jsonify({'erro': 'Usuário não autenticado'}), 401
+
+    payload = request.get_json(silent=True) or request.args or request.form
+    usuario_solicitante = usuario_solicitante_da_requisicao(payload)
+    if not usuario_solicitante:
+        return jsonify({'erro': 'Usuário não autenticado'}), 401
+
+    if not usuario_solicitante.is_admin:
+        return jsonify({'erro': 'Apenas administrador pode deletar clientes.'}), 403
+
+    if usuario_solicitante.id == cliente_id:
+        return jsonify({'erro': 'Não é possível deletar o usuário administrador atualmente em uso.'}), 400
+
+    usuario = Usuario.query.filter_by(id=cliente_id).first()
+    if not usuario:
+        return jsonify({'erro': 'Usuário não encontrado.'}), 404
+
+    try:
+        nome_cliente = usuario.nome
+        Agendamento.query.filter_by(usuario_id=cliente_id).delete()
+        pedidos = Pedido.query.filter_by(usuario_id=cliente_id).all()
+        for p in pedidos:
+            db.session.delete(p)
+        db.session.delete(usuario)
+        db.session.commit()
+        return jsonify({'mensagem': f'Cliente "{nome_cliente}" deletado com sucesso.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'erro': f'Erro ao deletar cliente: {str(e)}'}), 500
 
 
 @app.route('/selecionar_empresa', methods=['POST'])

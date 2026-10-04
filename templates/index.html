@@ -534,6 +534,7 @@
                         <div id="mensagemEditarCliente" class="small mt-3 text-muted"></div>
                     </div>
                     <div class="modal-footer">
+                        <button type="button" class="btn btn-danger me-auto" id="btnDeletarCliente">Deletar cliente</button>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                         <button type="button" class="btn btn-primary" id="btnSalvarCliente">Salvar alterações</button>
                     </div>
@@ -1767,7 +1768,11 @@
                 
                 if (response.ok) {
                     const valorTotalFormat = parseFloat(data.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    alert(`Pedido realizado com sucesso!\nID do Pedido: ${data.pedido_id}\nValor Total: R$ ${valorTotalFormat}`);
+                    let msgSucesso = `Pedido realizado com sucesso!\nID do Pedido: ${data.pedido_id}\nValor Total: R$ ${valorTotalFormat}`;
+                    if (data.aviso_email) {
+                        msgSucesso += `\n\n[Aviso]: ${data.aviso_email}`;
+                    }
+                    alert(msgSucesso);
                     
                     // Limpa o pedido temporário
                     limparPedidoTemporario();
@@ -1851,6 +1856,43 @@
                     await carregarClientes(true);
                 } catch (erro) {
                     document.getElementById('mensagemEditarCliente').textContent = erro.message || erro;
+                }
+            });
+        }
+
+        const btnDeletarCliente = document.getElementById('btnDeletarCliente');
+        if (btnDeletarCliente) {
+            btnDeletarCliente.addEventListener('click', async function() {
+                const select = document.getElementById('selectClienteEdicao');
+                const clienteId = select?.value;
+                if (!clienteId) {
+                    alert('Selecione um cliente para deletar.');
+                    return;
+                }
+
+                const cliente = clientesDisponiveis.find((item) => String(item.id) === String(clienteId));
+                const nomeCliente = cliente ? cliente.nome : `ID ${clienteId}`;
+
+                if (!confirm(`Tem certeza que deseja deletar o cliente "${nomeCliente}"?\nEssa ação removerá o cadastro do cliente e seus pedidos.`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/clientes/${clienteId}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ usuario_id: currentUserId })
+                    });
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.erro || 'Falha ao deletar cliente');
+                    }
+
+                    alert(data.mensagem || 'Cliente deletado com sucesso.');
+                    await carregarClientes(true);
+                } catch (erro) {
+                    alert('Erro ao deletar cliente: ' + (erro.message || erro));
                 }
             });
         }
