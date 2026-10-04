@@ -488,54 +488,48 @@ def obter_ips_ipv4(host, port):
 
 
 def conectar_smtp_resiliente(host, port, user, password, use_tls=True):
-    ips = obter_ips_ipv4(host, port)
-    if not ips:
-        ips = [host]
-
     senha_limpa = (password or '').replace(' ', '').strip()
     erros = []
 
-    for ip in ips:
+    # 1. Prioridade absoluta: Porta 465 (SSL) em IPv4 com check_hostname = False
+    # Isso evita bloqueios de porta 587 no Render e erros de IPv6 / certificado IP mismatch.
+    ips_465 = obter_ips_ipv4(host, 465)
+    for ip in ips_465:
         try:
-            if port == 465 or not use_tls:
-                context = ssl.create_default_context()
-                servidor = smtplib.SMTP_SSL(ip, port, timeout=20, context=context, server_hostname=host)
-            else:
-                servidor = smtplib.SMTP(ip, port, timeout=20)
-                if use_tls:
-                    context = ssl.create_default_context()
-                    servidor.starttls(context=context)
-
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            servidor = smtplib.SMTP_SSL(ip, 465, timeout=15, context=context)
             if user and senha_limpa:
                 servidor.login(user, senha_limpa)
             return servidor
         except Exception as e:
-            erros.append(f"IP {ip}:{port} -> {e}")
+            erros.append(f"SSL IPv4 {ip}:465 -> {e}")
 
-    if port != 465:
-        ips_465 = obter_ips_ipv4(host, 465)
-        for ip in ips_465:
-            try:
-                context = ssl.create_default_context()
-                servidor = smtplib.SMTP_SSL(ip, 465, timeout=20, context=context, server_hostname=host)
-                if user and senha_limpa:
-                    servidor.login(user, senha_limpa)
-                return servidor
-            except Exception as e:
-                erros.append(f"Fallback IP {ip}:465 -> {e}")
-
-    try:
-        if port == 465 or not use_tls:
-            servidor = smtplib.SMTP_SSL(host, port, timeout=20)
-        else:
-            servidor = smtplib.SMTP(host, port, timeout=20)
+    # 2. Tentar porta 587 (TLS com IPv4) se porta 465 falhar
+    ips_587 = obter_ips_ipv4(host, 587)
+    for ip in ips_587:
+        try:
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            servidor = smtplib.SMTP(ip, 587, timeout=15)
             if use_tls:
-                servidor.starttls()
+                servidor.starttls(context=context)
+            if user and senha_limpa:
+                servidor.login(user, senha_limpa)
+            return servidor
+        except Exception as e:
+            erros.append(f"TLS IPv4 {ip}:587 -> {e}")
+
+    # 3. Fallback final usando o hostname direto
+    try:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        servidor = smtplib.SMTP_SSL(host, 465, timeout=15, context=context)
         if user and senha_limpa:
             servidor.login(user, senha_limpa)
         return servidor
     except Exception as e:
-        erros.append(f"Host direct {host}:{port} -> {e}")
+        erros.append(f"Direct {host}:465 -> {e}")
 
     raise RuntimeError(f"Falha ao conectar no servidor SMTP: {'; '.join(erros)}")
 
