@@ -2,6 +2,8 @@ import os
 import json
 import re
 import smtplib
+import socket
+import ssl
 import sys
 import time
 from io import BytesIO
@@ -476,6 +478,68 @@ def pode_acessar_pedido(usuario_solicitante, pedido):
     return bool(usuario_solicitante and (usuario_solicitante.is_admin or pedido.usuario_id == usuario_solicitante.id))
 
 
+def obter_ips_ipv4(host, port):
+    try:
+        infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        ips = [info[4][0] for info in infos if info and len(info) > 4]
+        return list(dict.fromkeys(ips))
+    except Exception:
+        return [host]
+
+
+def conectar_smtp_resiliente(host, port, user, password, use_tls=True):
+    ips = obter_ips_ipv4(host, port)
+    if not ips:
+        ips = [host]
+
+    senha_limpa = (password or '').replace(' ', '').strip()
+    erros = []
+
+    for ip in ips:
+        try:
+            if port == 465 or not use_tls:
+                context = ssl.create_default_context()
+                servidor = smtplib.SMTP_SSL(ip, port, timeout=20, context=context, server_hostname=host)
+            else:
+                servidor = smtplib.SMTP(ip, port, timeout=20)
+                if use_tls:
+                    context = ssl.create_default_context()
+                    servidor.starttls(context=context)
+
+            if user and senha_limpa:
+                servidor.login(user, senha_limpa)
+            return servidor
+        except Exception as e:
+            erros.append(f"IP {ip}:{port} -> {e}")
+
+    if port != 465:
+        ips_465 = obter_ips_ipv4(host, 465)
+        for ip in ips_465:
+            try:
+                context = ssl.create_default_context()
+                servidor = smtplib.SMTP_SSL(ip, 465, timeout=20, context=context, server_hostname=host)
+                if user and senha_limpa:
+                    servidor.login(user, senha_limpa)
+                return servidor
+            except Exception as e:
+                erros.append(f"Fallback IP {ip}:465 -> {e}")
+
+    try:
+        if port == 465 or not use_tls:
+            servidor = smtplib.SMTP_SSL(host, port, timeout=20)
+        else:
+            servidor = smtplib.SMTP(host, port, timeout=20)
+            if use_tls:
+                servidor.starttls()
+        if user and senha_limpa:
+            servidor.login(user, senha_limpa)
+        return servidor
+    except Exception as e:
+        erros.append(f"Host direct {host}:{port} -> {e}")
+
+    raise RuntimeError(f"Falha ao conectar no servidor SMTP: {'; '.join(erros)}")
+
+
 def enviar_email_pedido_admin(usuario, pedido, itens):
     recipientes = []
     if usuario and usuario.email and '@' in usuario.email and not usuario.email.endswith('.local'):
@@ -530,32 +594,20 @@ def enviar_email_pedido_admin(usuario, pedido, itens):
     if not SMTP_HOST:
         raise RuntimeError('SMTP_HOST não configurado para envio de email.')
 
-    senha_limpa = SMTP_PASSWORD.replace(' ', '').strip()
-
+    servidor = conectar_smtp_resiliente(
+        host=SMTP_HOST,
+        port=SMTP_PORT,
+        user=SMTP_USER,
+        password=SMTP_PASSWORD,
+        use_tls=SMTP_USE_TLS
+    )
     try:
-        if SMTP_PORT == 465:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as servidor:
-                if SMTP_USER and senha_limpa:
-                    servidor.login(SMTP_USER, senha_limpa)
-                servidor.send_message(mensagem)
-        else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as servidor:
-                if SMTP_USE_TLS:
-                    servidor.starttls()
-                if SMTP_USER and senha_limpa:
-                    servidor.login(SMTP_USER, senha_limpa)
-                servidor.send_message(mensagem)
-    except Exception as err_principal:
-        if SMTP_PORT != 465:
-            try:
-                with smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=30) as servidor:
-                    if SMTP_USER and senha_limpa:
-                        servidor.login(SMTP_USER, senha_limpa)
-                    servidor.send_message(mensagem)
-                return
-            except Exception:
-                pass
-        raise err_principal
+        servidor.send_message(mensagem)
+    finally:
+        try:
+            servidor.quit()
+        except Exception:
+            pass
 
 
 # Rotas Principais do Frontend (Interface Web)
